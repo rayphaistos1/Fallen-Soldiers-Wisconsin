@@ -1,0 +1,188 @@
+---
+title: "Wisconsin County Visualization in R"
+author: "raymond.k.roberts@gmail.com"
+date: "March 7, 2020"
+output:
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages for project
+
+```{r, message=FALSE}
+require(usmap)
+library(ggplot2)
+require(dplyr)
+require(readxl)
+require(ggpubr)
+```
+
+## Download Data
+
+The dataset being utilized I created by reading through the obituary of every US soldier that died in a combat zone for the Iraqi and Afghan wars. While the obituaries were readily available via Military.com, there was not an accessible structured data set. This required first running a query through website which presented the links, then browsing through each individually. 
+
+Wisconsin has 72 counties and a population rougly around 5.5 million, just shy of the total population of country Finland. The state is mostly rural geographically, which leads to a narrative that the state is mainly fueled and supported by rural populations. This idea extends past simply economic and political discussions and even into who is serviing the to the benefit of the state and the nation. This is an visual journey through the data using those who made the highest sacrifice as a proxy for population and culture trends. 
+
+
+```{r}
+
+fallen <- read.csv("C://wifallen.csv")
+fallen$fall <- ifelse(fallen$Hometown == "" , 0, 1)
+
+```
+## Aggregating Data County. 
+
+```{r}
+
+# Data Transformation for Aggregation
+A<-unique(fallen %>%
+  group_by(fips) %>%
+    mutate(number_casualties = sum(fall)) %>%
+    select(fips,County,number_casualties))
+
+A <- A[order(-A$number_casualties),]
+
+
+# Summary Statistics for Counties with Casualties
+state_casualty_mean <- mean(A$number_casualties)
+state_casualty_sum <- sum(A$number_casualties)
+county_with_casualty_count <- length(A$number_casualties)
+
+
+```
+
+
+# True final Visualization
+
+```{r}
+
+#Dropping counties with no values for more dramatic demonstration
+fallen2 <- read.csv("C://wifallen.csv") 
+fallen2$Hometown <- ifelse(fallen2$Hometown=="", NA ,fallen2$Hometown )
+
+fallen2 <- fallen2[complete.cases(fallen2), ]
+
+
+X<-unique(fallen2 %>%
+  group_by(fips) %>%
+    mutate(number_casualties = n()) %>%
+    select(fips,County,number_casualties))
+
+WZmap<- usmap::plot_usmap(
+  data = X, values = "number_casualties", include = c("WI"), regions = "counties", color = "red"
+  )+
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Raw Count", label = scales::comma
+  ) + 
+  labs(title = "Wisconsin US Service Member Casualties \n Iraq & Afghanistan", 
+       subtitle = "Reported casualty Counts through Feb. 17, 2020               .",
+       caption = "           Grey Counties have zero casualties ")
+
+
+Mapper1 <-WZmap + theme(
+  plot.title = element_text(color = "red", size = 20, face = "bold",hjust = 0.45, vjust=2.12),
+  plot.subtitle = element_text(color = "blue",hjust = 0.75),
+  plot.caption = element_text(color = "black", face = "italic"),
+  legend.position = "right"
+)
+
+```
+
+
+# Weighting by County Ratio of State Population
+```{r}
+
+fallen$Pop.Pct <- scale(fallen$Pop.Pct, center = TRUE, scale = TRUE)
+
+
+X<-unique(fallen %>%
+  group_by(fips) %>%
+    mutate(number_casualties = n(),
+           weighted_casualties = number_casualties*(1/Pop.Pct)) %>%
+    select(fips,County,weighted_casualties))
+
+WZmap<- usmap::plot_usmap(
+  data = X, values = "weighted_casualties", include = c("WI"), regions = "counties", color = "red"
+  )+
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Red: More than Expected \n White: Fewer than Expected", 
+    label = scales::comma
+  ) + 
+  labs(subtitle = "Weighted by County Population as Proportion of State Population\n (Normalized)") +
+  theme(legend.position = "right")
+
+
+Mapper2 <-WZmap + theme(
+  plot.title = element_text(color = "red", size = 12, face = "bold"),
+  plot.subtitle = element_text(color = "blue"),
+  plot.caption = element_text(color = "black", face = "italic")
+)
+
+
+```
+
+```{r}
+
+# Density of population
+
+fallen$Pop.Dense <- scale(fallen$Pop.Dense, center = TRUE, scale = TRUE)
+
+X<-unique(fallen %>%
+  group_by(fips) %>%
+    mutate(number_casualties = n(),
+           weighted_casualties_density = number_casualties*(Pop.Dense)) %>%
+    select(fips,County, weighted_casualties_density))
+
+
+WZmap<- usmap::plot_usmap(
+  data = X, values = "weighted_casualties_density", include = c("WI"), regions = "counties", color = "red"
+  )+
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Red: More than Expected \n White: Fewer than Expected ",label = scales::comma
+  ) + 
+  labs(subtitle = "Weighted by County Population Density \n (Normalized)",
+       caption =  "The Engagement Initiative                            creator: raymond.k.roberts@gmail.com.") +
+  theme(legend.position = "right")
+
+
+Mapper3 <- WZmap + theme(
+  plot.subtitle = element_text(color = "blue"),
+  plot.caption = element_text(color = "black", face = "italic", hjust = -0.15)
+)
+
+
+
+
+```
+
+
+# Collective Views
+
+```{r}
+
+ggarrange(Mapper1 , Mapper2, Mapper3  + rremove("x.text"), 
+          ncol = 1, nrow = 3)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
